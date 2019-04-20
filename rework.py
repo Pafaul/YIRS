@@ -2,6 +2,7 @@
 import math
 import time
 import dronekit
+from dronekit import VehicleMode
 import cv2
 import numpy as np
 
@@ -73,7 +74,7 @@ def vehicle_initialization():
     vehicle=dronekit.connect('/dev/ttyACM0', baud=115200, wait_ready=True)
     while (not vehicle.is_armable):
         time.sleep(1)
-    vehicle.mode = 'GUIDED'
+    vehicle.mode = VehicleMode('GUIDED')
     return vehicle
 
 ################################################
@@ -198,7 +199,8 @@ def main():
     log.write('Start attitude: ' + str(start_attitude))
     
     while (True):
-        if vehicle.mode == 'GUIDED' or vehicle.mode == 'GuidedNoGps':
+        log.write('Time: ' + str(time.time()-start_time))
+        if vehicle.mode == VehicleMode('GUIDED'):
             current_time=time.time()
             flag, img = cap.read()
             resolution = img.shape[1::-1]
@@ -208,6 +210,7 @@ def main():
             log.write('image pixel coords: ' + str(pixels))
             if ( pixels[0] != -1 ) and ( pixels[1] != -1 ):
                 set_vehicle_attitude(vehicle)
+                log.write('cannot detect target')
                 continue
             #"центровка" пиксельных координат
             for i in range(0, 1):
@@ -243,23 +246,25 @@ def main():
             log.write('required angles: ' + str(angles))
             log.write('attitude: ' + str(get_attitude(vehicle)))
             log.write('altitude: ' + str(get_altitude(vehicle)))
+            log.write('vehicle mode: ' + str(vehicle.mode))
             #получение заданой частоты работы
             while (time.time() < current_time + 1/frequency):
-                if vehicle.mode != 'GUIDED' || vehicle.mode != 'GuidedNoGps':
+                if vehicle.mode != VehicleMode('GUIDED'):
+                    log.write('break due to mode switch. current mode: ' + str(vehicle.mode))
                     break
                 
-                
-        else:
-            if (time.time() - start_time  < work_time):
-                if (vehicle.armed):
-                    set_vehicle_attitude(vehicle)
-                pass
-            else:
+        elif (time.time() - start_time > work_time):
+                log.write('end')
                 vehicle.close()
                 video.release()
                 res_video.release()
                 cap.release()
-                log.close()
+                log.close()        
+        elif (time.time() - start_time  < work_time):
+            if (vehicle.armed):
+                set_vehicle_attitude(vehicle)
+                
+            
 ################################################
 #arm test
 def arm_test():
@@ -299,14 +304,14 @@ def take_off_test():
 
 def safety_check(vehicle, time = 0):
     if (time == 0):
-        if vehicle.mode == 'GUIDED':
+        if vehicle.mode == VehicleMode('GUIDED'):
             return True
         else
             return False
     else:
         start_time = time.time()
         while (time.time() - start_time < time ):
-            if vehicle.mode == 'GUIDED':
+            if vehicle.mode == VehicleMode('GUIDED'):
                 pass
             else
                 return False
