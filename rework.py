@@ -5,6 +5,8 @@ import dronekit
 import cv2
 import numpy as np
 
+################################################
+work_time = 60*5;
 
 ################################################
 #videos
@@ -61,8 +63,8 @@ def initialize_cam():
     return cap
 
 def initialize_videos():
-    video = cv2.VideoWriter("output_orig.avi", cv2.cv.CV_FOURCC(*'XVID'), 10, (image_resolution[0], image_resolution[1]))
-    res_video = cv2.VideoWriter("output_result.avi", cv2.cv.CV_FOURCC(*'XVID'), 10, (image_resolution[0], image_resolution[1]))
+    video = cv2.VideoWriter("output_orig.avi", cv2.cv.CV_FOURCC(*'XVID'), 5, (image_resolution[0], image_resolution[1]))
+    res_video = cv2.VideoWriter("output_result.avi", cv2.cv.CV_FOURCC(*'XVID'), 5, (image_resolution[0], image_resolution[1]))
     return [video, res_video]
 
 ################################################
@@ -189,6 +191,11 @@ def main():
     vehicle = vehicle_initialization()
     video, res_video = initialize_videos()
     start_height = get_altitude(vehicle)
+    start_time = time.time()
+    start_altitude = get_altitude(vehicle)
+    start_attitude = get_attitude(vehicle)
+    log.write('Start altitude: ' + str(start_altitude))
+    log.write('Start attitude: ' + str(start_attitude))
     
     while (True):
         if vehicle.mode == 'GUIDED' or vehicle.mode == 'GuidedNoGps':
@@ -243,12 +250,137 @@ def main():
                 
                 
         else:
-            vehicle.close()
-            video.release()
-            res_video.release()
-            cap.release()
-            log.close()
+            if (time.time() - start_time  < work_time):
+                if (vehicle.armed):
+                    set_vehicle_attitude(vehicle)
+                pass
+            else:
+                vehicle.close()
+                video.release()
+                res_video.release()
+                cap.release()
+                log.close()
+################################################
+#arm test
+def arm_test():
+    while ( not vehicle.armed ):
+        vehicle.armed = True
+        sleep(1)
+    if (vehicle.armed):
+        vehicle.armed = False
 
+    vehicle.close()
+
+#take off test
+def take_off_test():
+    global vehicle
+    smooth_take_off=0.6
+    fast_take_off=0.7
+    smooth_landing=0.4
+    vehicle = vehicle.initialization()
+    start_height = get_altitude(vehicle)
+    while ( not vehicle.armed ):
+        vehicle.armed = True
+        sleep(1)
+    if (vehicle.armed):
+        set_vehicle_attitude(vehicle, thrust = smooth_take_off)
+        while (get_altitude(vehicle) - start_height < 0.95*2):
+            if ( not safety_check(vehicle) ) break;
+            
+        set_vehicle_attitude(vehicle thrust = smooth_landing)
+        while (get_altitude(vehicle) - start_height > 0.05*2):
+            if ( not safety_check(vehicle) ) break;
+
+        vehicle.armed = False
+
+    vehicle.close()
+
+#attitude changing test
+
+def safety_check(vehicle, time = 0):
+    if (time == 0):
+        if vehicle.mode == 'GUIDED':
+            return True
+        else
+            return False
+    else:
+        start_time = time.time()
+        while (time.time() - start_time < time ):
+            if vehicle.mode == 'GUIDED':
+                pass
+            else
+                return False
+        return True
+
+def attitude_change_test():
+    global vehicle
+    smooth_take_off=0.6
+    fast_take_off=0.7
+    smooth_landing=0.4
+    vehicle = vehicle.initialization()
+    start_height = get_altitude(vehicle)
+    stop = False
+    while ( not vehicle.armed ):
+        vehicle.arm()
+        sleep(1)
+    if (vehicle.armed):
+        set_vehicle_attitude(vehicle, thrust = smooth_take_off)
+        while (get_altitude(vehicle) - start_height < 0.95*2):
+            if ( not safety_check(vehicle) ):
+                stop = True
+                break;
+        
+        if not stop:
+            set_vehicle_attitude(vehicle, [2/180*math.pi, 0, 0])
+        if ( not safety_check(vehicle, 1) ):
+                stop = True
+                break;
+            
+
+        if not stop:
+            set_vehicle_attitude(vehicle, [-2/180*math.pi, 0, 0])
+        if ( not safety_check(vehicle, 1) ):
+                stop = True
+                break;
+
+        if not stop:
+            set_vehicle_attitude(vehicle, [0, -2/180*math.pi, 0])
+        if ( not safety_check(vehicle, 1) ):
+                stop = True
+                break;
+
+        if not stop:
+            set_vehicle_attitude(vehicle, [0, 2/180*math.pi, 0])
+        if ( not safety_check(vehicle, 1) ):
+                stop = True
+                break;
+        
+        if not stop:
+            set_vehicle_attitude(vehicle, thrust = smooth_landing)
+        while (get_altitude(vehicle) - start_height > 0.05*2):
+            if ( not safety_check(vehicle) ):
+                stop = True
+                break;
+            
+        vehicle.disarm()
+
+    vehicle.close()
+
+def check_thrust():
+    global vehicle
+    vehicle = initialize_vehicle()
+    vehicle.arm()
+    if (vehicle.armed):
+        set_vehicle_attitude(vehicle, thrust = 0.5)
+        sleep(1)
+        set_vehicle_attitude(vehicle, thrust = 1)
+        sleep(1)
+        set_vehicle_attitude(vehicle, thrust = 0.1)
+        sleep(1)
+
+        vehicle.disarm()
+    vehicle.close()
+    
 ################################################
 if __name__ == '__main__':
     main()
